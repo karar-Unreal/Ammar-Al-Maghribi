@@ -143,7 +143,7 @@ html[data-theme=light] #stars{display:none}
   <div class="tabs" id="tabs" role="tablist"></div>
   <div class="chips" id="chips"></div>
   <div class="notice" id="demo" hidden>هذه مواضيع تجريبية للمعاينة. فعّل Firebase داخل الملف ليعمل النشر والتفاعل الحقيقي.</div>
-  <div class="adm" id="adm"><h2 class="gold">بانتظار المراجعة</h2><div class="stat" id="stat"></div><div id="pend"></div></div>
+  <div class="adm" id="adm"><h2 class="gold">بانتظار المراجعة</h2><div class="stat" id="stat"></div><div id="pend"></div><h2 class="gold" style="margin:18px 0 8px">💼 العمولات المستحقة</h2><div id="comm"></div></div>
   <div class="grid" id="grid"><noscript><div class="empty">عمار المغربي للفلك والطب البديل والأحجار الكريمة: أدعية، رقية شرعية، حجابات، طلاسم، أسرار وعلوم، وسوق للبيع والشراء. فعّل JavaScript لعرض المواضيع.</div></noscript></div>
 </main>
 <footer>
@@ -173,11 +173,12 @@ html[data-theme=light] #stars{display:none}
   <select id="psec"></select>
   <div id="mk" hidden>
     <select id="pk"><option>بيع</option><option>شراء</option></select>
-    <div class="two"><input id="ppr" type="number" min="0" step="any" placeholder="السعر"><select id="pcu"><option>دينار عراقي</option><option>دولار</option><option>أخرى</option></select></div>
+    <div class="two"><input id="ppr" type="number" min="0" step="any" placeholder="السعر"><select id="pcu" aria-label="العملة"></select></div>
     <input id="pst" type="number" min="1" placeholder="الكمية المتوفرة (اختياري)">
     <input id="pph" type="tel" placeholder="رقم واتساب للتواصل (يظهر للجميع)" dir="ltr">
     <textarea id="ptm" maxlength="400" style="min-height:80px" placeholder="شروط البائع: التوصيل، الضمان، الاسترجاع، طرق الدفع المقبولة..."></textarea>
     <label class="rule"><input type="checkbox" id="pord" checked style="width:auto;margin:0 0 0 6px"> السماح بالشراء عبر الموقع (طلب ثم دفع مباشر للبائع)</label>
+    <div class="rule" id="cmn"></div>
   </div>
   <input id="ptl" maxlength="120" placeholder="عنوان الموضوع">
   <textarea id="pbd" maxlength="5000" placeholder="اكتب موضوعك هنا..."></textarea>
@@ -241,6 +242,8 @@ html[data-theme=light] #stars{display:none}
   var FIREBASE = {apiKey:'AIzaSyD4Me4nJfNW55ZIHesuY-I3GMQelJIKkI4',authDomain:'mywebyasserahjar.firebaseapp.com',projectId:'mywebyasserahjar',appId:'1:972974098:web:934dad310eaf82805410cb'};
   var ADMINS = ['kokoiraq78888@gmail.com'];
   var MARKET = 'بيع وشراء', SAVED = '⭐ المحفوظات';
+  var COMMISSION = 5;   // نسبة عمولة الموقع % على كل عملية بيع مكتملة (مدير الموقع معفى)
+  var ADMIN_PAY = 'اكتب هنا حسابك لاستلام العمولة (مثال: زين كاش 07XXXXXXXXX)';
   var SECTIONS = ['أدعية','رقية شرعية','حجابات','طلاسم','أسرار وعلوم','فلك وأبراج','طب بديل','أحجار كريمة',MARKET];
 
   var GA = '';   // اختياري: معرّف Google Analytics مثل G-XXXXXXXXXX لمعرفة عدد الزوار
@@ -348,7 +351,7 @@ html[data-theme=light] #stars{display:none}
   function needLogin(){ mode(false); $('#dlg').showModal(); }
   $('#login').onclick = needLogin; $('#sw').onclick = function(){ mode(!signup); };
   $('#psec').onchange = function(){ $('#mk').hidden = $('#psec').value!==MARKET; };
-  $('#new').onclick = function(){ if(!user) { needLogin(); say(msg,'سجّل الدخول أولاً لتنشر موضوعاً'); } else { $('#pem').value = $('#pem').value || user.email || ''; $('#pub').showModal(); } };
+  $('#new').onclick = function(){ if(!user) { needLogin(); say(msg,'سجّل الدخول أولاً لتنشر موضوعاً'); } else { $('#pem').value = $('#pem').value || user.email || ''; $('#cmn').textContent = admin ? 'بصفتك مدير الموقع: لا توجد عمولة على مبيعاتك.' : 'عمولة الموقع '+COMMISSION+'% على كل عملية بيع مكتملة عبر الموقع، يدفعها البائع بعد اكتمال الطلب.'; $('#pub').showModal(); } };
 
   if (ok) {
     firebase.initializeApp(FIREBASE); auth = firebase.auth(); db = firebase.firestore();
@@ -356,7 +359,7 @@ html[data-theme=light] #stars{display:none}
       user = u; admin = !!u && u.emailVerified && ADMINS.indexOf(u.email) > -1;
       $('#login').style.display = u?'none':''; $('#usr').style.display = u?'flex':'none';
       if (u) { $('#uname').textContent = (admin?'👑 ':'')+(u.displayName||u.email); $('#dlg').close(); }
-      $('#adm').style.display = admin ? 'block' : 'none'; if (admin) loadPending(); if (cur===MINE) loadMine(); badge();
+      $('#adm').style.display = admin ? 'block' : 'none'; if (admin) { loadPending(); loadComm(); } if (cur===MINE) loadMine(); badge();
     });
     $('#sub').onclick = function(){
       var e=$('#em').value.trim(), p=$('#pw').value; if(!e||!p) return say(msg,'أدخل البريد وكلمة المرور'); say(msg,'جارٍ التحميل...',true);
@@ -400,7 +403,7 @@ html[data-theme=light] #stars{display:none}
     if (sec===MARKET && $('#pk').value==='بيع' && $('#pord').checked && !(parseFloat($('#ppr').value)>0)) return say(pm,'حدّد السعر لتفعيل الشراء عبر الموقع');
     var last=0; try{ last=+localStorage.getItem('lp')||0; }catch(e){}
     if (Date.now()-last<60000) return say(pm,'انتظر دقيقة بين كل منشور وآخر');
-    var data={title:t,body:b,section:sec,uid:user.uid,author:user.displayName||'عضو',approved:false,likedBy:[],createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+    var data={title:t,body:b,section:sec,uid:user.uid,author:user.displayName||'عضو',approved:false,byAdmin:!!admin,likedBy:[],createdAt:firebase.firestore.FieldValue.serverTimestamp()};
     if (sec===MARKET) { data.kind=$('#pk').value; data.phone=ph;
       var pn=parseFloat($('#ppr').value); if (pn>0) { data.pnum=pn; data.pcur=$('#pcu').value; data.price=pn.toLocaleString('en-US')+' '+data.pcur; }
       var sv=parseInt($('#pst').value,10); if (sv>0) data.stock=sv;
@@ -440,6 +443,29 @@ html[data-theme=light] #stars{display:none}
   }
   $('#dau').onclick = function(){ $('#pd').close(); document.querySelector('#tabs button').click(); who=open.author; chips(); render(); scrollTo({top:0}); };
 
+  /* ---------- عملات العالم + العمولة ---------- */
+  (function(){
+    var top='IQD USD USDT EUR SAR AED KWD QAR BHD OMR JOD EGP TRY IRR SYP LBP LYD TND DZD MAD SDG YER GBP'.split(' ');
+    var rest='AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BIF BMD BND BOB BRL BSD BTN BWP BYN BZD CAD CDF CHF CLP CNY COP CRC CUP CVE CZK DJF DKK DOP ERN ETB FJD FKP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR ISK JMD JPY KES KGS KHR KMF KPW KRW KYD KZT LAK LKR LRD LSL MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN NIO NOK NPR NZD PAB PEN PGK PHP PKR PLN PYG RON RSD RUB RWF SBD SCR SEK SGD SHP SLE SOS SRD SSP STN SVC SZL THB TJS TMT TOP TTD TWD TZS UAH UGX UYU UZS VES VND VUV WST XAF XCD XOF XPF ZAR ZMW ZWL'.split(' ');
+    var dn; try { dn=new Intl.DisplayNames(['ar'],{type:'currency'}); } catch(e){}
+    var nm=function(c){ try { return dn.of(c)||c; } catch(e){ return c; } };
+    rest.sort(function(a,b){ return nm(a).localeCompare(nm(b),'ar'); });
+    var sel=$('#pcu'); top.concat(rest).forEach(function(c){ var o=h('option',null,nm(c)+' ('+c+')'); o.value=nm(c)+' ('+c+')'; sel.appendChild(o); });
+  })();
+  function comm(o){ return o.byAdmin ? 0 : Math.round((o.total||0)*COMMISSION)/100; }
+  function loadComm(){
+    db.collection('orders').where('status','==','completed').limit(200).get().then(function(sn){
+      var box=$('#comm'), tot={}, rows=[]; box.textContent='';
+      sn.docs.forEach(function(d){ var o=d.data(); if (o.byAdmin||o.commPaid) return; o.ref=d.ref; rows.push(o); tot[o.cur||'']=(tot[o.cur||'']||0)+comm(o); });
+      var ks=Object.keys(tot);
+      box.appendChild(h('div','rule',ks.length?'الإجمالي المستحق: '+ks.map(function(k){ return tot[k].toLocaleString('en-US')+' '+k; }).join(' + '):'لا توجد عمولات مستحقة.'));
+      rows.forEach(function(o){
+        var r=h('div','row'); r.appendChild(h('span',null,o.sellerName+' — '+o.title+' — '+comm(o).toLocaleString('en-US')+' '+(o.cur||'')));
+        var b=h('button','btn s f','تم استلام العمولة'); b.onclick=function(){ o.ref.update({commPaid:true,updatedAt:TS()}).then(loadComm); }; r.appendChild(b); box.appendChild(r);
+      });
+    }).catch(function(){});
+  }
+
   /* ---------- نظام الطلبات والمحفظة ---------- */
   var WTYPES=['زين كاش','آسيا حوالة','كي كارد','ماستر كارد / بنك','PayPal','تحويل بنكي','أخرى'];
   var STAT={pending:'بانتظار موافقة البائع',accepted:'مقبول — بانتظار الدفع',paid:'تم الدفع — بانتظار تأكيد البائع',completed:'مكتمل ✅',rejected:'مرفوض',cancelled:'ملغي'};
@@ -474,7 +500,7 @@ html[data-theme=light] #stars{display:none}
     if (!(q>=1) || (ordP.stock && q>ordP.stock)) return say(om,'الكمية غير صحيحة');
     if (bp.length<8) return say(om,'أدخل رقم واتساب صحيحاً');
     say(om,'جارٍ الإرسال...',true);
-    db.collection('orders').add({postId:ordP.id,title:ordP.title,sellerUid:ordP.uid,sellerName:ordP.author,sphone:ordP.phone||'',buyerUid:user.uid,buyerName:user.displayName||'عضو',bphone:bp,qty:q,unit:ordP.pnum,cur:ordP.pcur||'',total:ordP.pnum*q,note:$('#onote').value.trim().slice(0,300),status:'pending',createdAt:TS(),updatedAt:TS()})
+    db.collection('orders').add({postId:ordP.id,title:ordP.title,sellerUid:ordP.uid,sellerName:ordP.author,sphone:ordP.phone||'',buyerUid:user.uid,buyerName:user.displayName||'عضو',bphone:bp,qty:q,unit:ordP.pnum,cur:ordP.pcur||'',total:ordP.pnum*q,note:$('#onote').value.trim().slice(0,300),status:'pending',byAdmin:!!ordP.byAdmin,createdAt:TS(),updatedAt:TS()})
       .then(function(){ say(om,'تم إرسال طلبك! تابعه من زر 🧾 وسيتواصل معك البائع.',true); chime(); }).catch(fail(om));
   };
   function badge(){
@@ -495,6 +521,7 @@ html[data-theme=light] #stars{display:none}
     c.appendChild(h('b',null,(sel?'📥 طلب وارد':'🛒 طلبي')+' — '+o.title));
     c.appendChild(h('div','rule','الكمية: '+o.qty+' | الإجمالي: '+(o.total||0).toLocaleString('en-US')+' '+(o.cur||'')+' | '+(sel?'المشتري: '+o.buyerName:'البائع: '+o.sellerName)));
     if (o.note) c.appendChild(h('div','rule','📝 '+o.note));
+    if (sel && o.status==='completed' && !o.byAdmin) c.appendChild(h('div','rule','💼 عمولة الموقع ('+COMMISSION+'%): '+comm(o).toLocaleString('en-US')+' '+(o.cur||'')+' — '+(o.commPaid?'مدفوعة ✅':'مستحقة، ادفعها إلى: '+ADMIN_PAY)));
     c.appendChild(h('span','tag',STAT[o.status]||o.status));
     var btn=function(t,cl,fn){ var b=h('button','btn s '+cl,t); b.onclick=fn; ac.appendChild(b); };
     var wa=function(ph,t){ var a=h('a','btn s','💬 '+t); a.href='https://wa.me/'+String(ph).replace(/\D/g,''); a.target='_blank'; a.rel='noopener'; ac.appendChild(a); };
@@ -515,6 +542,8 @@ html[data-theme=light] #stars{display:none}
       var all=[]; r[0].docs.forEach(function(d){ var o=d.data(); o.id=d.id; o.role='buyer'; all.push(o); }); r[1].docs.forEach(function(d){ var o=d.data(); o.id=d.id; o.role='seller'; all.push(o); });
       all.sort(function(a,b){ return (b.createdAt?b.createdAt.toMillis():0)-(a.createdAt?a.createdAt.toMillis():0); });
       L.textContent=''; if (!all.length) L.appendChild(h('div','empty','لا توجد طلبات بعد.'));
+      var due={}; all.forEach(function(o){ if (o.role==='seller' && o.status==='completed' && !o.byAdmin && !o.commPaid) due[o.cur||'']=(due[o.cur||'']||0)+comm(o); });
+      var ks=Object.keys(due); if (ks.length) L.appendChild(h('div','notice','💼 عمولة مستحقة عليك: '+ks.map(function(k){ return due[k].toLocaleString('en-US')+' '+k; }).join(' + ')+' — ادفعها إلى: '+ADMIN_PAY));
       all.forEach(function(o){ L.appendChild(orderCard(o)); });
     }).catch(function(){ L.textContent=''; L.appendChild(h('div','empty','تعذّر تحميل الطلبات. تأكد من قواعد Firestore.')); });
   }
